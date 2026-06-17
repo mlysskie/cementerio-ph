@@ -1,13 +1,336 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id        String   @id @default(cuid())
+  nombre    String
+  email     String   @unique
+  password  String
+  rol       String   @default("consulta") // administrador, operador, mesa_entradas, consulta
+  activo    Boolean  @default(true)
+  creadoEn  DateTime @default(now())
+  auditoria Auditoria[]
+  sesiones  Session[]
+  cuentas   Account[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model Sector {
+  id        String   @id @default(cuid())
+  nombre    String
+  codigo    String   @unique
+  descripcion String?
+  manzanas  Manzana[]
+  creadoEn  DateTime @default(now())
+}
+
+model Manzana {
+  id        String   @id @default(cuid())
+  numero    String
+  sectorId  String
+  sector    Sector   @relation(fields: [sectorId], references: [id])
+  filas     Fila[]
+  creadoEn  DateTime @default(now())
+  @@unique([numero, sectorId])
+}
+
+model Fila {
+  id        String   @id @default(cuid())
+  numero    String
+  manzanaId String
+  manzana   Manzana  @relation(fields: [manzanaId], references: [id])
+  fosas     Fosa[]
+  creadoEn  DateTime @default(now())
+}
+
+model Fosa {
+  id          String   @id @default(cuid())
+  numero      String
+  filaId      String
+  fila        Fila     @relation(fields: [filaId], references: [id])
+  estado      String   @default("libre") // libre, ocupado, reservado, vencido, abandonado
+  titularId   String?
+  titular     Titular? @relation(fields: [titularId], references: [id])
+  fallecidos  PersonaFallecida[]
+  coordX      Float?
+  coordY      Float?
+  creadoEn    DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+}
+
+model Pabellon {
+  id        String   @id @default(cuid())
+  nombre    String
+  codigo    String   @unique
+  bloques   Bloque[]
+  creadoEn  DateTime @default(now())
+}
+
+model Bloque {
+  id         String   @id @default(cuid())
+  nombre     String
+  pabellonId String
+  pabellon   Pabellon @relation(fields: [pabellonId], references: [id])
+  filas      FilaNicho[]
+  creadoEn   DateTime @default(now())
+}
+
+model FilaNicho {
+  id       String   @id @default(cuid())
+  numero   String
+  bloqueId String
+  bloque   Bloque   @relation(fields: [bloqueId], references: [id])
+  nichos   Nicho[]
+  creadoEn DateTime @default(now())
+}
+
+model Nicho {
+  id          String   @id @default(cuid())
+  numero      String
+  filaId      String
+  fila        FilaNicho @relation(fields: [filaId], references: [id])
+  estado      String   @default("libre") // libre, ocupado, reservado
+  titularId   String?
+  titular     Titular? @relation(fields: [titularId], references: [id])
+  fallecidos  PersonaFallecida[]
+  coordX      Float?
+  coordY      Float?
+  creadoEn    DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+}
+
+model Panteon {
+  id              String   @id @default(cuid())
+  numero          String   @unique
+  familia         String
+  capacidadMaxima Int      @default(10)
+  ocupacionActual Int      @default(0)
+  estado          String   @default("activo")
+  titularId       String?
+  titular         Titular? @relation(fields: [titularId], references: [id])
+  fallecidos      PersonaFallecida[]
+  coordX          Float?
+  coordY          Float?
+  creadoEn        DateTime @default(now())
+  actualizadoEn   DateTime @updatedAt
+}
+
+model Deposito {
+  id          String   @id @default(cuid())
+  codigo      String   @unique
+  descripcion String?
+  estado      String   @default("disponible")
+  fallecidos  PersonaFallecida[]
+  creadoEn    DateTime @default(now())
+}
+
+model Titular {
+  id          String   @id @default(cuid())
+  nombre      String
+  dni         String   @unique
+  direccion   String?
+  telefono    String?
+  email       String?
+  activo      Boolean  @default(true)
+  fosas       Fosa[]
+  nichos      Nicho[]
+  panteones   Panteon[]
+  herederos   Heredero[]
+  historial   HistorialTitularidad[]
+  creadoEn    DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+}
+
+model Heredero {
+  id          String   @id @default(cuid())
+  titularId   String
+  titular     Titular  @relation(fields: [titularId], references: [id])
+  nombre      String
+  dni         String
+  relacion    String
+  telefono    String?
+  email       String?
+  creadoEn    DateTime @default(now())
+}
+
+model HistorialTitularidad {
+  id              String   @id @default(cuid())
+  titularAnterior String
+  titularNuevo    String
+  titularNuevoId  String?
+  titular         Titular? @relation(fields: [titularNuevoId], references: [id])
+  fecha           DateTime
+  motivo          String?
+  espacioTipo     String   // fosa, nicho, panteon
+  espacioId       String
+  creadoEn        DateTime @default(now())
+}
+
+model PersonaFallecida {
+  id                String   @id @default(cuid())
+  apellido          String
+  nombre            String
+  dni               String?
+  fechaNacimiento   DateTime?
+  fechaFallecimiento DateTime
+  nroActaDefuncion  String?
+  observaciones     String?
+
+  tipoSepultura     String   // tierra, nicho, panteon, osario, deposito, cremado
+  estadoActual      String   @default("sepultado") // sepultado, exhumado, trasladado, cremado, en_deposito, entregado
+  fechaIngreso      DateTime @default(now())
+
+  fosaId            String?
+  fosa              Fosa?    @relation(fields: [fosaId], references: [id])
+  nichoId           String?
+  nicho             Nicho?   @relation(fields: [nichoId], references: [id])
+  panteonId         String?
+  panteon           Panteon? @relation(fields: [panteonId], references: [id])
+  depositoId        String?
+  deposito          Deposito? @relation(fields: [depositoId], references: [id])
+
+  historialMovimientos HistorialMovimiento[]
+  tramites          Tramite[]
+  documentos        Documento[]
+
+  creadoEn          DateTime @default(now())
+  actualizadoEn     DateTime @updatedAt
+}
+
+model HistorialMovimiento {
+  id               String   @id @default(cuid())
+  fallecidoId      String
+  fallecido        PersonaFallecida @relation(fields: [fallecidoId], references: [id])
+  fecha            DateTime
+  tipo             String   // inhumacion, exhumacion, traslado, cremacion, cambio_titularidad, deposito
+  descripcion      String
+  ubicacionAnterior String?
+  ubicacionNueva   String?
+  responsable      String?
+  creadoEn         DateTime @default(now())
+}
+
+model Tramite {
+  id           String   @id @default(cuid())
+  expediente   String   @unique
+  tipo         String   // exhumacion, traslado, cremacion, cambio_titularidad, tierra_a_nicho, renovacion, cesion, otro
+  estado       String   @default("iniciado") // iniciado, en_revision, aprobado, finalizado, rechazado
+  fallecidoId  String?
+  fallecido    PersonaFallecida? @relation(fields: [fallecidoId], references: [id])
+  solicitante  String
+  descripcion  String?
+  fechaInicio  DateTime @default(now())
+  fechaFin     DateTime?
+
+  exhumacion   Exhumacion?
+  traslado     Traslado?
+  cremacion    Cremacion?
+  cambioTitularidad CambioTitularidad?
+
+  documentos   Documento[]
+  creadoEn     DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+}
+
+model Exhumacion {
+  id                 String   @id @default(cuid())
+  tramiteId          String   @unique
+  tramite            Tramite  @relation(fields: [tramiteId], references: [id])
+  fechaExhumacion    DateTime?
+  motivo             String?
+  destinoRestos      String?
+  personalResponsable String?
+}
+
+model Traslado {
+  id                 String   @id @default(cuid())
+  tramiteId          String   @unique
+  tramite            Tramite  @relation(fields: [tramiteId], references: [id])
+  origen             String
+  destino            String
+  fechaTraslado      DateTime?
+  empresa            String?
+  vehiculo           String?
+  conductor          String?
+}
+
+model Cremacion {
+  id                String   @id @default(cuid())
+  tramiteId         String   @unique
+  tramite           Tramite  @relation(fields: [tramiteId], references: [id])
+  fechaCremacion    DateTime?
+  crematorio        String?
+  destinoCenizas    String?
+  responsable       String?
+}
+
+model CambioTitularidad {
+  id              String   @id @default(cuid())
+  tramiteId       String   @unique
+  tramite         Tramite  @relation(fields: [tramiteId], references: [id])
+  titularAnterior String
+  titularNuevo    String
+  motivo          String?
+}
+
+model Documento {
+  id           String   @id @default(cuid())
+  nombre       String
+  tipo         String   // pdf, jpg, png, doc, otro
+  url          String
+  tramiteId    String?
+  tramite      Tramite? @relation(fields: [tramiteId], references: [id])
+  fallecidoId  String?
+  fallecido    PersonaFallecida? @relation(fields: [fallecidoId], references: [id])
+  descripcion  String?
+  creadoEn     DateTime @default(now())
+}
+
+model Auditoria {
+  id        String   @id @default(cuid())
+  usuarioId String?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+  accion    String
+  entidad   String
+  entidadId String?
+  detalles  String?
+  ip        String?
+  creadoEn  DateTime @default(now())
 }
